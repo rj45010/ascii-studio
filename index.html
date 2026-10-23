@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCII Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Windows Media Player 10 on XP: pale glass body, blue tab strip */
+    --ink: #1c3a6e; --soft: #4b6798; --text: #10203d;
+    --glass-a: #f7faff; --glass-b: #dce7f7; --glass-c: #b7cbea; --edge: #8aa3cf; --edge-hi: #fff;
+    --blue-a: #6f9be0; --blue-b: #3d6cc0; --blue-c: #2a58a8;
+    --pane-a: #eef4fc; --pane-b: #d3e0f3;
+    --green: #3fb43a; --red: #d93c1f;
+    --ui: Tahoma, Verdana, "Segoe UI", sans-serif;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: #8aa3cf transparent; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #8aa3cf; border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--blue-b); }
+  body { margin: 0; height: 100vh; background: linear-gradient(var(--glass-a), var(--glass-c)); font: 12px/1.3 var(--ui); color: var(--text); }
+
+  .window { height: 100%; display: grid; grid-template-rows: 38px 28px minmax(0, 1fr) 84px; }
+
+  /* tab strip */
+  .tabs { display: flex; align-items: flex-end; gap: 2px; padding: 0 10px; background: linear-gradient(#fbfdff, #dbe6f6 60%, #c5d6ef); border-bottom: 1px solid var(--edge); }
+  .tab, .tabs .file {
+    all: unset; box-sizing: border-box; cursor: pointer; height: 30px; padding: 0 18px; display: inline-flex; align-items: center; gap: 8px;
+    font: 13px var(--ui); color: var(--ink); border-left: 1px solid rgba(255, 255, 255, 0.9); box-shadow: -1px 0 0 #c0cfe8;
+  }
+  .tab:hover:not(:disabled), .tabs .file:hover { background: linear-gradient(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.3)); }
+  .tab:disabled { opacity: 0.45; cursor: default; }
+  .tab:focus-visible, .tabs .file:focus-within { outline: 1px dotted var(--ink); outline-offset: -4px; }
+  .tab.now {
+    cursor: default; height: 34px; padding: 0 16px 0 10px; color: #fff; border: 1px solid var(--blue-c); border-bottom: 0; border-radius: 8px 8px 0 0; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    background: linear-gradient(#8fb3ea, var(--blue-a) 45%, var(--blue-b)); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25); font-size: 14px; margin-right: 8px;
+  }
+  .tab.now svg { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3)); }
+  #record.on { border-color: var(--red); box-shadow: 0 0 0 2px rgba(217, 60, 31, 0.35); }
+  .sep { width: 1px; height: 36px; margin: 0 6px; background: var(--edge); box-shadow: 1px 0 #fff; }
+  #record svg { fill: var(--red); }
+  #record.on svg { animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0.25; } }
+  .file input { display: none; }
+
+  /* blue sub-bar under the tabs */
+  .subbar { display: flex; align-items: center; gap: 8px; padding: 0 12px; color: #fff; background: linear-gradient(var(--blue-a), var(--blue-b) 55%, var(--blue-c)); border-bottom: 1px solid #1d3f7c; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3); white-space: nowrap; overflow: hidden; }
+  .subbar::before { content: ""; width: 14px; height: 14px; border-radius: 3px; border: 1px solid #fff; background: linear-gradient(#b8f0a8, var(--green)); }
+
+  .content { display: grid; grid-template-columns: 250px minmax(0, 1fr) 250px; min-height: 0; background: #000; }
+  main { display: grid; min-width: 0; min-height: 0; background: #000; }
+  .stage { position: relative; display: grid; place-items: safe center; min-height: 0; overflow: auto; }
+  .stage canvas:not(.zoomed) { position: absolute; inset: 0; margin: auto; }
+  .stage canvas.zoomed { max-width: none; max-height: none; }
+  canvas { display: block; max-width: 100%; max-height: 100%; }
+  canvas:not([width]) { display: none; }
+  .drop { text-align: center; color: #8aa3cf; }
+  .drop strong { display: block; font: 400 18px Silkscreen, monospace; color: #fff; margin-bottom: 6px; }
+
+  aside.bar { overflow-y: auto; min-height: 0; background: linear-gradient(90deg, var(--pane-a), var(--pane-b)); }
+  aside.bar:first-child { border-right: 1px solid var(--edge); }
+  aside.bar:last-child { border-left: 1px solid var(--edge); background: linear-gradient(270deg, var(--pane-a), var(--pane-b)); }
+  h2 { margin: 0; padding: 6px 12px; font: bold 11px var(--ui); color: var(--ink); background: linear-gradient(#fff, #dfe8f6); border-bottom: 1px solid #b9c9e6; border-top: 1px solid #fff; }
+  .group { padding: 4px 0 8px; }
+  .group label { display: grid; grid-template-columns: 74px 1fr 30px; align-items: center; gap: 8px; min-height: 30px; padding: 0 12px; color: var(--text); }
+  .group label.text { grid-template-columns: 74px 1fr; }
+  .group label.check { grid-template-columns: 1fr auto; }
+  output { text-align: right; font-variant-numeric: tabular-nums; color: var(--soft); }
+  input[type=text] { font: 12px Silkscreen, monospace; padding: 3px 6px; width: 100%; border: 1px solid #7f9db9; border-radius: 2px; background: #fff; color: #000; }
+  input[type=checkbox] { width: 13px; height: 13px; margin: 0; accent-color: var(--blue-b); }
+  /* --p is set from JS so the track fills like the WMP seek bar */
+  input[type=range] { appearance: none; width: 100%; height: 16px; background: transparent; margin: 0; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; border: 1px solid #7d93bd; background: linear-gradient(90deg, #8fd36b, #3fa52f var(--p, 0%), #fff var(--p, 0%)); }
+  input[type=range]::-moz-range-track { height: 4px; border-radius: 2px; border: 1px solid #7d93bd; background: linear-gradient(90deg, #8fd36b, #3fa52f var(--p, 0%), #fff var(--p, 0%)); }
+  input[type=range]::-webkit-slider-thumb { appearance: none; width: 13px; height: 13px; margin-top: -5px; border-radius: 50%; border: 1px solid #6c86b6; background: radial-gradient(circle at 40% 35%, #fff, #dbe6f6 55%, #9fb6dc); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
+  input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; border: 1px solid #6c86b6; background: radial-gradient(circle at 40% 35%, #fff, #dbe6f6 55%, #9fb6dc); }
+
+  /* transport */
+  .transport { display: flex; align-items: center; gap: 8px; padding: 0 12px; border-top: 1px solid #fff; background: linear-gradient(#fdfeff, #e3ecf9 45%, #c3d4ee); box-shadow: inset 0 1px 0 var(--edge); }
+  .round {
+    display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border-radius: 50%; cursor: pointer; color: var(--ink); font: bold 15px var(--ui);
+    border: 1px solid var(--edge); background: radial-gradient(circle at 50% 30%, #fff, var(--glass-b) 55%, var(--glass-c));
+    box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(28, 58, 110, 0.35);
+  }
+  .round.big { width: 50px; height: 50px; }
+  .round:hover:not(:disabled) { box-shadow: inset 0 1px 0 #fff, 0 0 0 2px rgba(111, 155, 224, 0.45), 0 1px 2px rgba(28, 58, 110, 0.35); }
+  .round:active:not(:disabled) { background: radial-gradient(circle at 50% 70%, #fff, var(--glass-c)); }
+  .round:disabled { opacity: 0.45; cursor: default; }
+  .pair { display: flex; }
+  .pair .round { width: 34px; height: 34px; }
+  .pair .round:first-child { border-radius: 50% 0 0 50%; border-right-width: 0; }
+  .pair .round:last-child { border-radius: 0 50% 50% 0; }
+  /* angled readout panel, the WMP10 "now playing" display */
+  .display {
+    margin-left: auto; display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 16px 0 40px; color: var(--ink);
+    background: linear-gradient(#ffffff, #e6eefa); border: 1px solid var(--edge); border-radius: 0 6px 6px 0;
+    clip-path: polygon(28px 0, 100% 0, 100% 100%, 0 100%); box-shadow: inset 0 1px 0 #fff;
+  }
+  .display button { all: unset; cursor: pointer; font: bold 14px var(--ui); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+  .display button:disabled { opacity: 0.45; cursor: default; }
+  .display .fit { font-size: 11px; font-weight: normal; color: var(--soft); min-width: 0; text-decoration: underline; }
+  .bars { display: flex; align-items: flex-end; gap: 1px; height: 14px; }
+  .bars i { width: 2px; background: var(--soft); }
+
+  @media (max-width: 900px) {
+    body { height: auto; }
+    .window { grid-template-rows: auto 28px auto auto; }
+    .tabs { flex-wrap: wrap; padding-top: 4px; }
+    .content { grid-template-columns: 1fr; }
+    main { order: -1; }
+    .stage { min-height: 45vh; }
+    .transport { flex-wrap: wrap; padding: 10px 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="window">
+  <nav class="tabs" aria-label="File">
+    <span class="tab now">
+      <svg width="18" height="18" viewBox="0 0 30 30" aria-hidden="true">
+        <rect width="30" height="30" rx="7" fill="#f79a1e"/>
+        <rect x='7' y='7' width='3' height='3' fill='#fff' opacity='0.25'/><rect x='11' y='7' width='3' height='3' fill='#fff' opacity='0.50'/><rect x='15' y='7' width='3' height='3' fill='#fff' opacity='0.75'/><rect x='19' y='7' width='3' height='3' fill='#fff' opacity='1.00'/><rect x='7' y='11' width='3' height='3' fill='#fff' opacity='0.50'/><rect x='11' y='11' width='3' height='3' fill='#fff' opacity='0.75'/><rect x='15' y='11' width='3' height='3' fill='#fff' opacity='1.00'/><rect x='19' y='11' width='3' height='3' fill='#fff' opacity='1.00'/><rect x='7' y='15' width='3' height='3' fill='#fff' opacity='0.75'/><rect x='11' y='15' width='3' height='3' fill='#fff' opacity='1.00'/><rect x='15' y='15' width='3' height='3' fill='#fff' opacity='1.00'/><rect x='19' y='15' width='3' height='3' fill='#fff' opacity='1.00'/><rect x='7' y='19' width='3' height='3' fill='#fff' opacity='1.00'/><rect x='11' y='19' width='3' height='3' fill='#fff' opacity='1.00'/><rect x='15' y='19' width='3' height='3' fill='#fff' opacity='1.00'/><rect x='19' y='19' width='3' height='3' fill='#fff' opacity='1.00'/>
+      </svg>
+      ASCII Studio
+    </span>
+    <label class="file tab">Open<input type="file" id="file" accept="image/*,video/*"></label>
+  </nav>
+  <div class="subbar" id="status">Ready</div>
+  <div class="content">
+    <aside class="bar left">
+      <h2>Characters</h2>
+      <div class="group">
+        <label class="text">Characters <input type="text" id="chars" value=".xX8S0#@"></label>
+        <label>Cell size <input type="range" id="cell" min="5" max="20" value="10"></label>
+        <label>Opacity <input type="range" id="charOpacity" min="0" max="100" value="100"></label>
+        <label class="check">Random characters <input type="checkbox" id="randomChars"></label>
+      </div>
+      <h2>Placement</h2>
+      <div class="group">
+        <label>Threshold <input type="range" id="threshold" min="0" max="90" value="45"></label>
+        <label>Coverage <input type="range" id="coverage" min="0" max="100" value="100"></label>
+        <label>Edges <input type="range" id="edges" min="0" max="100" value="0"></label>
+        <label class="check">Invert <input type="checkbox" id="invert"></label>
+      </div>
+    </aside>
+    <main>
+      <div class="stage" id="stage">
+        <div class="drop" id="hint"><strong>Drop an image or video</strong>or click Open</div>
+        <canvas id="out"></canvas>
+      </div>
+    </main>
+    <aside class="bar">
+      <h2>Colour</h2>
+      <div class="group">
+        <label>Brightness <input type="range" id="brightness" min="-50" max="50" value="0"></label>
+        <label>Contrast <input type="range" id="contrast" min="50" max="200" value="100"></label>
+        <label>Saturation <input type="range" id="saturation" min="0" max="200" value="100"></label>
+      </div>
+      <h2>Background</h2>
+      <div class="group">
+        <label>Blur <input type="range" id="blur" min="0" max="8" step="0.5" value="3"></label>
+        <label>Dim <input type="range" id="dim" min="30" max="100" value="80"></label>
+      </div>
+      <h2>Effects</h2>
+      <div class="group">
+        <label>Bloom <input type="range" id="bloom" min="0" max="100" value="85"></label>
+        <label>Vignette <input type="range" id="vignette" min="0" max="100" value="55"></label>
+        <label>Grain <input type="range" id="grain" min="0" max="100" value="0"></label>
+      </div>
+    </aside>
+  </div>
+  <div class="transport">
+    <button class="round big" id="save" title="Save PNG" aria-label="Save PNG" disabled>
+      <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M7 1h2v8l3-3 1.4 1.4L8 12.8 2.6 7.4 4 6l3 3zM2 13h12v2H2z"/></svg>
+    </button>
+    <button class="round" id="record" title="Record video" aria-label="Record video" disabled>
+      <svg width="12" height="12" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="5"/></svg>
+    </button>
+    <span class="sep"></span>
+    <div class="pair">
+      <button class="round" id="zoomOut" aria-label="Zoom out" disabled>&minus;</button>
+      <button class="round" id="zoomIn" aria-label="Zoom in" disabled>+</button>
+    </div>
+    <div class="display">
+      <span class="bars" aria-hidden="true"><i style="height:30%"></i><i style="height:60%"></i><i style="height:45%"></i><i style="height:90%"></i><i style="height:70%"></i><i style="height:100%"></i><i style="height:55%"></i><i style="height:35%"></i></span>
+      <span>Zoom</span>
+      <button id="zoomLevel" aria-label="Actual size" disabled>Fit</button>
+      <button class="fit" id="zoomFit" disabled>Fit</button>
+    </div>
+  </div>
+</div>
+<script>
+// @ts-check
+const MAX_W = 1920;
+
+/**
+ * @template {Element} T
+ * @param {string} id
+ * @param {{ new (): T, prototype: T }} type
+ * @returns {T}
+ */
+function el(id, type) {
+  const e = document.getElementById(id);
+  if (!(e instanceof type)) throw new Error(`#${id} is not a ${type.name}`);
+  return e;
+}
+/** @param {string} id */
+const input = id => el(id, HTMLInputElement);
+/** @param {string} id */
+const num = id => input(id).valueAsNumber;
+
+/**
+ * @param {HTMLCanvasElement} canvas
+ * @param {CanvasRenderingContext2DSettings} [opts]
+ */
+function context(canvas, opts) {
+  const c = canvas.getContext('2d', opts);
+  if (!c) throw new Error('Canvas 2D is not available');
+  return c;
+}
+
+const out = el('out', HTMLCanvasElement), ctx = context(out);
+const glyphs = document.createElement('canvas'), gctx = context(glyphs);
+const sample = document.createElement('canvas'), sctx = context(sample, { willReadFrequently: true });
+const noise = Object.assign(document.createElement('canvas'), { width: 256, height: 256 }), nctx = context(noise);
+const saveBtn = el('save', HTMLButtonElement), recordBtn = el('record', HTMLButtonElement);
+/** @type {HTMLImageElement | HTMLVideoElement | null} */
+let source = null;
+let isVideo = false;
+
+let fileName = '';
+
+/** @param {File | undefined} file */
+function load(file) {
+  if (!file) return;
+  fileName = file.name;
+  const url = URL.createObjectURL(file);
+  isVideo = file.type.startsWith('video');
+  if (isVideo) {
+    const v = document.createElement('video');
+    Object.assign(v, { src: url, muted: true, loop: true, playsInline: true });
+    v.onloadeddata = () => { v.play(); start(v, v.videoWidth, v.videoHeight); };
+  } else {
+    const img = new Image();
+    img.onload = () => start(img, img.naturalWidth, img.naturalHeight);
+    img.src = url;
+  }
+}
+
+/**
+ * @param {HTMLImageElement | HTMLVideoElement} media
+ * @param {number} w
+ * @param {number} h
+ */
+function start(media, w, h) {
+  const s = Math.min(1, MAX_W / w);
+  out.width = glyphs.width = Math.round(w * s);
+  out.height = glyphs.height = Math.round(h * s);
+  source = media;
+  el('hint', HTMLElement).hidden = true;
+  el('status', HTMLElement).textContent = `${fileName} : ${w}×${h}`;
+  saveBtn.disabled = false;
+  recordBtn.disabled = !isVideo;
+  for (const b of zoomBtns) b.disabled = false;
+  setZoom(0);
+  if (isVideo) requestAnimationFrame(loop); else render();
+}
+
+function loop() { render(); if (isVideo && source) requestAnimationFrame(loop); }
+
+function render() {
+  if (!source) return;
+  const W = out.width, H = out.height;
+  const cell = num('cell'), th = num('threshold') / 100;
+  const cols = Math.ceil(W / cell), rows = Math.ceil(H / cell);
+  const ramp = input('chars').value || ' ';
+  const coverage = num('coverage') / 100, edges = num('edges') / 100, charOpacity = num('charOpacity') / 100;
+  const invert = input('invert').checked, randomChars = input('randomChars').checked;
+  const grade = `brightness(${1 + num('brightness') / 100}) contrast(${num('contrast') / 100}) saturate(${num('saturation') / 100})`;
+
+  sample.width = cols; sample.height = rows;
+  sctx.filter = grade;
+  sctx.drawImage(source, 0, 0, cols, rows);
+  const px = sctx.getImageData(0, 0, cols, rows).data;
+
+  gctx.clearRect(0, 0, W, H);
+  gctx.font = `${Math.round(cell * 0.85)}px Silkscreen, monospace`;
+  gctx.textAlign = 'center';
+  gctx.textBaseline = 'middle';
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const i = (y * cols + x) * 4;
+      const r = px[i], g = px[i + 1], b = px[i + 2];
+      // max channel, not luminance, so saturated blue sky still gets glyphs like the reference
+      let l = Math.max(r, g, b) / 255;
+      if (invert) l = 1 - l;
+      if (edges) {
+        const j = i + (x < cols - 1 ? 4 : 0), d = i + (y < rows - 1 ? cols * 4 : 0);
+        const grad = (Math.abs(r - px[j]) + Math.abs(r - px[d]) + Math.abs(g - px[j + 1]) + Math.abs(g - px[d + 1])) / 510;
+        l = Math.min(1, l + edges * grad * 2);
+      }
+      if (l < th) continue;
+      const t = (l - th) / (1 - th);
+      const hash = ((x * 73856093 ^ y * 19349663) >>> 0) % 1000 / 1000;
+      // deterministic dropout: sparse glyphs in midtones, dense on highlights
+      if (hash > (0.3 + 0.7 * t) * coverage) continue;
+      const k = 0.45 + 0.45 * t;
+      gctx.fillStyle = `rgba(${r + (255 - r) * k | 0},${g + (255 - g) * k | 0},${b + (255 - b) * k | 0},${(0.6 + 0.4 * t) * charOpacity})`;
+      const idx = randomChars ? (hash * 7919 | 0) % ramp.length : Math.min(ramp.length - 1, t * ramp.length | 0);
+      gctx.fillText(ramp[idx], x * cell + cell / 2, y * cell + cell / 2);
+    }
+  }
+
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  ctx.filter = `blur(${num('blur')}px) brightness(${num('dim') / 100}) ${grade}`;
+  ctx.drawImage(source, 0, 0, W, H);
+
+  const bloom = num('bloom') / 100;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.filter = `blur(${Math.max(2, cell * 0.7)}px)`;
+  ctx.globalAlpha = bloom;
+  ctx.drawImage(glyphs, 0, 0);
+  ctx.filter = `blur(${Math.max(6, cell * 2)}px)`;
+  ctx.globalAlpha = bloom * 0.5;
+  ctx.drawImage(glyphs, 0, 0);
+  ctx.filter = 'none';
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(glyphs, 0, 0);
+
+  const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.hypot(W, H) / 2);
+  v.addColorStop(0, 'rgba(0,0,0,0)');
+  v.addColorStop(1, `rgba(0,0,0,${num('vignette') / 100})`);
+  ctx.fillStyle = v;
+  ctx.fillRect(0, 0, W, H);
+
+  const grain = num('grain') / 100;
+  const pattern = grain && ctx.createPattern(noise, 'repeat');
+  if (pattern) {
+    const img = nctx.createImageData(256, 256);
+    for (let p = 0; p < img.data.length; p += 4) {
+      img.data[p] = img.data[p + 1] = img.data[p + 2] = Math.random() * 255;
+      img.data[p + 3] = 255;
+    }
+    nctx.putImageData(img, 0, 0);
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.globalAlpha = grain * 0.5;
+    ctx.fillStyle = pattern;
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+}
+
+/** @param {Blob} blob @param {string} name */
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+}
+
+const stage = el('stage', HTMLElement), zoomLevel = el('zoomLevel', HTMLButtonElement);
+const zoomBtns = ['zoomOut', 'zoomLevel', 'zoomIn', 'zoomFit'].map(id => el(id, HTMLButtonElement));
+/** 0 means fit to the stage */
+let zoom = 0;
+
+/** @param {number} z */
+function setZoom(z) {
+  const cx = (stage.scrollLeft + stage.clientWidth / 2) / stage.scrollWidth;
+  const cy = (stage.scrollTop + stage.clientHeight / 2) / stage.scrollHeight;
+  zoom = z && Math.min(8, Math.max(0.1, z));
+  out.classList.toggle('zoomed', zoom > 0);
+  out.style.width = zoom ? `${out.width * zoom}px` : '';
+  stage.scrollLeft = cx * stage.scrollWidth - stage.clientWidth / 2;
+  stage.scrollTop = cy * stage.scrollHeight - stage.clientHeight / 2;
+  zoomLevel.textContent = `${Math.round((zoom || out.clientWidth / out.width) * 100)}%`;
+}
+const currentZoom = () => zoom || out.clientWidth / out.width;
+
+el('zoomIn', HTMLButtonElement).onclick = () => setZoom(currentZoom() * 1.25);
+el('zoomOut', HTMLButtonElement).onclick = () => setZoom(currentZoom() / 1.25);
+zoomLevel.onclick = () => setZoom(1);
+el('zoomFit', HTMLButtonElement).onclick = () => setZoom(0);
+// trackpad pinch arrives as ctrl+wheel
+stage.addEventListener('wheel', e => {
+  if (!source || !(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault();
+  setZoom(currentZoom() * Math.exp(-e.deltaY * 0.01));
+}, { passive: false });
+addEventListener('resize', () => zoom || setZoom(0));
+
+const fileInput = input('file');
+fileInput.onchange = () => load(fileInput.files?.[0]);
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); load(e.dataTransfer?.files[0]); });
+const controls = [...document.querySelectorAll('.bar input')].filter(i => i instanceof HTMLInputElement);
+for (const r of controls) if (r.type === 'range') r.after(document.createElement('output'));
+function syncReadouts() {
+  for (const r of controls) {
+    if (r.type !== 'range') continue;
+    r.style.setProperty('--p', `${(r.valueAsNumber - +r.min) / (+r.max - +r.min) * 100}%`);
+    if (r.nextElementSibling instanceof HTMLOutputElement) r.nextElementSibling.value = r.value;
+  }
+}
+syncReadouts();
+controls.forEach(r => r.addEventListener('input', () => {
+  syncReadouts();
+  if (!isVideo) render();
+}));
+
+/** @type {MediaRecorder | null} */
+let recorder = null;
+recordBtn.onclick = () => {
+  if (recorder) { recorder.stop(); return; }
+  const type = ['video/mp4', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t));
+  if (!type || !(source instanceof HTMLVideoElement)) return;
+  /** @type {Blob[]} */
+  const chunks = [];
+  const rec = new MediaRecorder(out.captureStream(30), { mimeType: type, videoBitsPerSecond: 12e6 });
+  rec.ondataavailable = e => chunks.push(e.data);
+  rec.onstop = () => {
+    download(new Blob(chunks, { type }), 'ascii.' + type.split('/')[1]);
+    recorder = null;
+    recordBtn.title = 'Record video'; recordBtn.classList.remove('on');
+  };
+  source.currentTime = 0;
+  rec.start();
+  recorder = rec;
+  recordBtn.title = 'Stop recording'; recordBtn.classList.add('on');
+};
+saveBtn.onclick = () => out.toBlob(b => b && download(b, 'ascii.png'));
+document.fonts.load('12px Silkscreen').then(() => isVideo || render());
+</script>
+</body>
+</html>
